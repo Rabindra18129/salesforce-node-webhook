@@ -1,47 +1,66 @@
-var oauthRouter=require('express').Router();
-var oauthClient=require('./salesForceClient');
-
-oauthRouter.get('/authorize',(req,res)=>{
+var oauthRouter = require('express').Router();
+var oauthClient = require('./salesForceClient');
+var uuid = require('uuid/v4');
+var timeOut = 300;
+oauthRouter.get('/authorize', (req, res) => {
+    var queryParams = req.query;
     console.log('Request came for Authorization code');
-    console.log('Query params are',req.query);
-    res.redirect(oauthClient.getAuthorizationUrl({}));
+    console.log('Query params are', queryParams);
+    res.redirect(oauthClient.getAuthorizationUrl({ state: queryParams.state }));
+});
+oauthRouter.get('/callback', (req, res) => {
+    var queryParams = req.query;
+    console.log('Request came for access callback');
+    console.log('Query params in callback uri is ', req.query);
+    let redirectUri = `${process.env.GOOGLE_REDIRECT_URI}code=${queryParams.code}&state=${queryParams.state}`;
+    console.log('Google redirecturi is ', redirectUri);
+    res.redirect(redirectUri);
 });
 
-oauthRouter.get('/getAccessToken', function(req,resp) {
-	console.log('Request came for getAccessToken Callback');
-	console.log('query params are-->',req.query);
+oauthRouter.post('/token', function(req, res) {
+    console.log('Request came for accecctoken');
+    console.log('query params are-->', req.body);
+    res.setHeader('Content-Type', 'application/json');
+    if (req.body.client_id != process.env.SALESFORCE_CONSUMER_KEY) {
+        console.log('Invalid Client ID');
+        return res.status(400).send('Invalid Client ID');
+    }
+    if (req.body.client_secret != process.env.SALESFORCE_CONSUMER_SECRET) {
+        console.log('Invalid Client Ksecret');
+        return res.status(400).send('Invalid Client ID');
+    }
+    if (req.body.grant_type) {
+        if (req.body.grant_type == 'authorization_code') {
+            console.log('Fetching token from salesforce');
+            oauthClient.requestToken(req.body.code, (err, tokenResponse) => {
+                if (err) {
+                    console.log(err.message);
+                    return res.status(400).json({ "error": "invalid_grant" });
+                }
+                var googleToken = {
+                    token_type: tokenResponse.token_type,
+                    access_token: tokenResponse.access_token,
+                    refresh_token: tokenResponse.refresh_token,
+                    expires_in: timeOut
+                };
+                console.log('Token response for auth code', googleToken);
+                res.status(200).json(googleToken);
 
-	// const oauth2 = new jsforce.OAuth2({
-	// 	clientId: process.env.SALESFORCE_CONSUMER_KEY,
-	// 	clientSecret: process.env.SALESFORCE_CONSUMER_SECRET,
-	// 	redirectUri: 'https://sfdcadminbot.herokuapp.com/getAccessToken'
-	// });
-
-	// const conn = new jsforce.Connection({ oauth2 : oauth2 });
-	// 	console.log('req query code '+req.query.code);
-	// 	conn.authorize(req.query.code, function(err, userInfo) {
-	// 	if (err) {
-    //         console.log('Error happened at authorization-->',err);
-	// 		return resp.send(err.message);
-	// 	}
-	// 	const conn2 = new jsforce.Connection({
-	// 		instanceUrl : conn.instanceUrl,
-	// 		accessToken : conn.accessToken
-	// 	});
-	// 	conn2.identity(function(err, res) {
-	// 	if (err) { 
-    //         console.log('Error happened at identity-->',err);
-    //         return resp.send(err.message); 
-    //     }
-	// 	  console.log("user ID: " + res.user_id);
-	// 	  console.log("organization ID: " + res.organization_id);
-	// 	  console.log("username: " + res.username);
-	// 	  console.log("display name: " + res.display_name);
-	// 	  options = { Authorization: 'Bearer '+conn.accessToken};
-	// 	  resp.redirect(`https://oauth-redirect.googleusercontent.com/r/YOUR_PROJECT_ID?code=${req.query.code}&state=true`);
-	// 	});
-	// });
-	res.send('final');
+            });
+        } else if (req.body.grant_type == 'refresh_token') {
+            console.log('Fetching refresh token from salesforce');
+            oauthClient.refreshToken(req.body.refresh_token, (err, tokenResponse) => {
+                if (err) {
+                    console.log(err.message);
+                    return res.status(400).json({ "error": "invalid_grant" });
+                }
+                var googleToken = { token_type: tokenResponse.token_type, access_token: tokenResponse.access_token, expires_in: timeOut };
+                console.log('Token response for auth code', googleToken);
+                res.status(200).json(googleToken);
+            });
+        }
+    } else {
+        res.send('Invalid parameter');
+    }
 });
-
-module.exports=oauthRouter;
+module.exports = oauthRouter;
