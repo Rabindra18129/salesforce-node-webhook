@@ -7,6 +7,8 @@ const {
     Suggestions,
     Button
 } = require('actions-on-google');
+
+var apexHandler = require('../jsForceHandler/apexHandler');
 const app = dialogflow();
 
 
@@ -52,19 +54,21 @@ app.intent('Get Opportunity Info', (conv, { oppName, fieldNames }) => {
     });
 });
 
-app.intent('Create Task on Opportunity', (conv, { oppName, taskSubject, taskPriority, contactFirstName }) => {
+app.intent('TaskCreate', async(conv) => {
 
-    const opName = conv.parameters['oppName'];
-    const tskSbj = conv.parameters['taskSubject'];
-    const tskPr = conv.parameters['taskPriority'];
-    const conFName = conv.parameters['contactFirstName'];
+    const opName = 'emphasis';
+    const tskSbj = 'call';
+    const tskPr = '';
+    const conFName = 'karen';
+    console.log('User details-->', conv.user.access.token);
 
-    return createTask(opName, tskSbj, tskPr, conFName).then((resp) => {
-        conv.ask(new SimpleResponse({
-            speech: resp,
-            text: resp,
-        }));
-    });
+    try {
+        var result = await apexHandler.getHandler(`/createTask?oppName=${opName}&taskSubject=${tskSbj}&taskPriority=${tskPr}&contactFirstName=${conFName}`, conv.user.access.token);
+        conv.close('Response from Salesforce', result);
+    } catch (error) {
+        conv.close('Not able to create task');
+    }
+    conv.close('task created successfully');
 });
 
 app.intent('Log Meeting Notes', (conv, { meetingNotes }) => {
