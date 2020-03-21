@@ -65,10 +65,11 @@ app.intent('TaskCreate', async(conv) => {
     try {
         var result = await apexHandler.getHandler(`/createTask?oppName=${opName}&taskSubject=${tskSbj}&taskPriority=${tskPr}&contactFirstName=${conFName}`, conv.user.access.token);
         conv.close('Response from Salesforce', result);
+        conv.close('task created successfully');
     } catch (error) {
         conv.close('Not able to create task');
     }
-    conv.close('task created successfully');
+   
 });
 
 app.intent('Log Meeting Notes', (conv, { meetingNotes }) => {
